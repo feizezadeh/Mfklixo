@@ -69,7 +69,7 @@ class Servermail__Qmail  extends lxDriverClass
 			$ret = lxshell_return("rpm", "-q", "spamdyke");
 
 			if ($ret) {
-				lxshell_return("yum", "install", "-y", "spamdyke");
+				lxshell_return("apt-get", "install", "-y", "spamdyke");
 			//	throw new lxException($login->getThrow('spamdyke_is_not_installed'), '', 'spamdyke');
 			}
 
@@ -99,7 +99,7 @@ class Servermail__Qmail  extends lxDriverClass
 			$ret = lxshell_return("rpm", "-q", "simscan-toaster");
 
 			if ($ret) {
-				lxshell_return("yum", "install", "-y", "simscan-toaster");
+				lxshell_return("apt-get", "install", "-y", "simscan");
 			//	throw new lxException($login->getThrow('simscan_is_not_installed_for_virus_scan'), '', 'simscan-toaster');
 			}
 
@@ -141,8 +141,8 @@ class Servermail__Qmail  extends lxDriverClass
 
 			//	lxshell_return("rpm", "-e", "--nodeps", "clamav");
 			//	lxshell_return("rpm", "-e", "--nodeps", "clamd");
-				lxshell_return("yum", "remove", "-y", "clamav", "clamd");
-				lxshell_return("yum", "remove", "-y", "simscan-toaster");
+				lxshell_return("apt-get", "remove", "-y", "clamav", "clamd");
+				lxshell_return("apt-get", "remove", "-y", "simscan");
 
 				$cpath = "/var/qmail/supervise/clamd";
 

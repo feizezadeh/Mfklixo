@@ -10,7 +10,7 @@ fi
 
 if [ "$(rpm -qa kexec-tools)" == "" ] ; then
 	echo "- Install 'kexec-tools'"
-	yum install kexec-tools -y
+	apt-get install kexec-tools -y
 fi
 
 if [ "${1}" != "" ] ; then

@@ -6,10 +6,10 @@ else
 	t=${1}
 fi
 
-yum deplist ${t}* \
-	|grep "dependency:"\
+apt-cache depends ${t}* \
+	|grep "Depends:"\
 	|grep -v "php"\
-	|grep -v "httpd"\
+	|grep -v "apache2"\
 	|grep -v "/bin"\
 	|grep -v "/sbin"\
 	|sed -e 's:\(GNU\_HASH\)::'\

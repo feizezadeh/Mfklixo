@@ -23,20 +23,20 @@
 # Version: 1.0 (2013-01-11 - by Mustafa Ramadhan <mustafa@bigraf.com>)
 #
 
-if [ "$(rpm -qa mratwork-release)" == "" ] ; then
+if [ "$(dpkg -l mratwork-release)" == "" ] ; then
 	cd /tmp
-	rpm -ivh https://github.com/mustafaramadhan/rpms/raw/master/mratwork/release/neutral/noarch/mratwork-release-0.0.1-1.noarch.rpm >/dev/null 2>&1
-	rpm -ivh mratwork-release-0.0.1-1.noarch.rpm >/dev/null 2>&1
-	yum update mratwork-release -y >/dev/null 2>&1
+	wget https://github.com/mustafaramadhan/rpms/raw/master/mratwork/release/neutral/noarch/mratwork-release-0.0.1-1.noarch.deb
+	dpkg -i mratwork-release-0.0.1-1.noarch.deb >/dev/null 2>&1
+	apt-get update -y >/dev/null 2>&1
 
-	'mv' -f /etc/yum.repos.d/lxcenter.repo /etc/yum.repos.d/lxcenter.nonrepo >/dev/null 2>&1
-	'mv' -f /etc/yum.repos.d/kloxo-mr.repo /etc/yum.repos.d/kloxo-mr.nonrepo >/dev/null 2>&1
+	'mv' -f /etc/apt/sources.list.d/lxcenter.list /etc/apt/sources.list.d/lxcenter.nonlist >/dev/null 2>&1
+	'mv' -f /etc/apt/sources.list.d/kloxo-mr.list /etc/apt/sources.list.d/kloxo-mr.nonlist >/dev/null 2>&1
 else
-	yum update mratwork-release -y >/dev/null 2>&1
+	apt-get update -y >/dev/null 2>&1
 fi
 
-if [ "$(rpm -qa ^'kloxomr7')" == "" ] ; then
-	yum install -y kloxomr7 >/dev/null 2>&1
+if [ "$(dpkg -l kloxomr7)" == "" ] ; then
+	apt-get install -y kloxomr7 >/dev/null 2>&1
 fi
 
 if [ ! -L /script ] ; then

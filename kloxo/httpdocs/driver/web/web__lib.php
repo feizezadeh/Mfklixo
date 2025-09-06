@@ -45,7 +45,7 @@ class web__ extends lxDriverClass
 	static function setUnnstallPhpfpm()
 	{
 		// MR -- change to it for speedup process
-		exec("yum remove php*-fpm -y");
+		exec("apt-get remove php*-fpm -y");
 	}
 
 	static function setInstallPhpfpm()

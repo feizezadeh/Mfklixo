@@ -24,7 +24,9 @@
 #
 
 ## MR -- prohibit to install to CentOS 5 (EOL since 31 Mar 2017)
-if [ "$(yum list|grep ^yum|awk '{print $3}'|grep '@')" == "" ] ; then
+if [ -f /etc/debian_version ] ; then
+    echo "Debian-based system detected"
+else
 	echo "*** No permit to install to CentOS 5 (because EOL since 31 Mar 2017)"
 	exit
 fi
@@ -36,31 +38,32 @@ if ! [ -d ${ppath}/log ] ; then
 	mkdir -p ${ppath}/log
 fi
 
-if [ -e /var/run/yum.pid ] ; then
-	'rm' -f /var/run/yum.pid
+if [ -e /var/run/apt.pid ] ; then
+	'rm' -f /var/run/apt.pid
 fi
 
 cd /
 
-yum clean all
+apt-get clean all
 
-if rpm -qa|grep 'mratwork-' >/dev/null 2>&1 ; then
-	yum update mratwork* -y
+if dpkg -l|grep 'mratwork-' >/dev/null 2>&1 ; then
+	apt-get update mratwork* -y
 else
 	cd /tmp
-	rpm -Uvh https://github.com/mustafaramadhan/kloxo/raw/rpms/release/neutral/noarch/mratwork-release-0.0.1-1.noarch.rpm
-	yum update mratwork-* -y
+	wget https://github.com/mustafaramadhan/kloxo/raw/rpms/release/neutral/noarch/mratwork-release-0.0.1-1.noarch.deb
+	dpkg -i mratwork-release-0.0.1-1.noarch.deb
+	apt-get update mratwork-* -y
 	
-	'rm' -rf /etc/yum.repos.d/kloxo-mr.repo
-	'rm' -rf /etc/yum.repos.d/kloxo-custom.repo
-	'rm' -rf /etc/yum.repos.d/lxcenter.repo
-	'rm' -rf /etc/yum.repos.d/lxlabs.repo
+	'rm' -rf /etc/apt/sources.list.d/kloxo-mr.list
+	'rm' -rf /etc/apt/sources.list.d/kloxo-custom.list
+	'rm' -rf /etc/apt/sources.list.d/lxcenter.list
+	'rm' -rf /etc/apt/sources.list.d/lxlabs.list
 
-	'rm' -rf /etc/yum.repos.d/epel*.repo
+	'rm' -rf /etc/apt/sources.list.d/epel*.list
 fi
 
 ## trouble with mysql55 for qmail-toaster
-sed -i 's/exclude\=mysql51/exclude\=mysql5/g' /etc/yum.repos.d/mratwork.repo
+sed -i 's/exclude\=mysql51/exclude\=mysql5/g' /etc/apt/sources.list.d/mratwork.list
 
 cd /
 
@@ -137,13 +140,13 @@ else
 	fi
 fi
 
-# Check if yum is installed.
-if ! [ -f /usr/sbin/yum ] && ! [ -f /usr/bin/yum ] ; then
-	echo -en "Yum installed          " $C_NO
-	echo -e "\a\nThe installer requires YUM to continue. Please install it and try again.\nAborting ...\n"
+# Check if apt-get is installed.
+if ! [ -f /usr/bin/apt-get ] ; then
+	echo -en "apt-get installed          " $C_NO
+	echo -e "\a\nThe installer requires APT to continue. Please install it and try again.\nAborting ...\n"
 	exit $E_NOYUM
 else
-	echo -en "Yum installed          " $C_OK
+	echo -en "apt-get installed          " $C_OK
 fi
 
 echo
@@ -159,25 +162,24 @@ cd /
 
 'rm' -rf *.rpm
 
-#yum clean all
+#apt-get clean all
 
-yum -y install wget zip unzip yum-utils yum-priorities yum-plugin-replace \
-	vim-minimal subversion curl sudo expect --skip-broken
+apt-get -y install wget zip unzip apt-utils sudo expect --skip-broken
 
-yum remove -y bind* nsd* pdns* mydns* yadifa* maradns djbdns* mysql-* mariadb-* MariaDB-* php* \
-		httpd-* mod_* httpd24u* mod24u_* nginx* lighttpd* varnish* squid* trafficserver* \
-		*-toaster postfix* exim* opensmtpd* esmtp* libesmtp* libmhash*
-rpm -e pure-ftpd --noscripts
+apt-get remove -y bind9* nsd* pdns* mydns* yadifa* maradns* djbdns* mysql-* mariadb-* php* \
+		apache2* libapache2-mod-* nginx* lighttpd* varnish* squid* trafficserver* \
+		qmail* postfix* exim* opensmtpd* esmtp* libesmtp* libmhash*
+dpkg -r pure-ftpd
 userdel postfix
-rpm -e vpopmail-toaster --noscripts
+dpkg -r vpopmail
 
 if id -u postfix >/dev/null 2>&1 ; then
 	userdel postfix
 fi
 
-#yum -y install mysql55 mysql55-server mysql55-libs
-yum -y install MariaDB MariaDB-shared
-yum -y install mysqlclient* --exclude=*devel* --exclude=*debuginfo*
+#apt-get -y install mysql-server
+apt-get -y install mariadb-server
+apt-get -y install mysql-client
 if ! [ -d /var/lib/mysqltmp ] ; then
 	mkdir -p /var/lib/mysqltmp
 fi
@@ -188,14 +190,14 @@ chown mysql:mysql /var/lib/mysqltmp
 sh /script/disable-mysql-aio
 sh /script/set-mysql-default
 
-if [ "$(yum list|grep ^'php56u')" != "" ] ; then
-	phpused="php56"
-#	yum -y install ${phpused}u-cli ${phpused}u-mysqlnd ${phpused}u-fpm
-	sh /script/php-branch-installer ${phpused}u
+if [ "$(apt-cache search php5.6)" != "" ] ; then
+	phpused="php5.6"
+#	apt-get -y install ${phpused}-cli ${phpused}-mysql ${phpused}-fpm
+	sh /script/php-branch-installer ${phpused}
 else
-	phpused="php54"
-#	yum -y install ${phpused}-cli ${phpused}-mysqlnd ${phpused}-fpm
-	sh /script/php-branch-installer ${phpused}u
+	phpused="php5.4"
+#	apt-get -y install ${phpused}-cli ${phpused}-mysql ${phpused}-fpm
+	sh /script/php-branch-installer ${phpused}
 fi
 
 chkconfig php-fpm on >/dev/null 2>&1

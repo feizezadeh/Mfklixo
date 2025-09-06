@@ -8,7 +8,7 @@ $mysqlbranch = getRpmBranchInstalled('mysql');
 
 echo "*** Change MariaDB to MySQL - begin ***\n";
 
-system("yum clean all");
+system("apt-get clean all");
 system("sh /script/fix-service-list");
 echo "\n";
 
@@ -18,29 +18,29 @@ if (strpos($mysqlbranch, "mysql") !== false) {
 	echo "* Already '{$mysqlbranch}' installed\n";
 } else {
 
-	exec("yum list|grep MariaDB", $out, $ret);
+	exec("apt-cache search mariadb-server", $out, $ret);
 	
 //	if ($ret) {
 //		echo "- Repo for MariaDB exists.\n";
-//		echo "  Open '/etc/yum.repos.d/mratwork.repo and change 'enable=1' to 'enable=0'\n";
-//		echo "  under [mratwork-mariadb32] for 32bit OS or [mratwork-mariadb64] for 64bit OS\n";
+//		echo "  Open '/etc/apt/sources.list.d/mratwork.list and comment it'\n";
+//		echo "  and then run 'sh /script/cleanup' again\n";
 //		exit;
 //	} else {
 		// MR -- don't use $mysqlbranch because for MariaDB mean MariaDB-server
-		$out2 = shell_exec("rpm -qa|grep MariaDB");
+		$out2 = shell_exec("dpkg -l | grep mariadb-server");
 
 		$arr = explode("\n", $out2);
 
 		echo "- Remove MariaDB packages\n";
 		foreach ($arr as &$o) {
-			system("rpm -e {$o} --nodeps");
+			system("dpkg -r {$o}");
 		}
 
 		echo "- Install MySQL\n";
-		system("yum install mysql55 mysql55-server --disablerepo=*mariadb* -y");
+		system("apt-get install mysql-server -y");
 
-		if (file_exists("/etc/my.cnf.d/my.cnf")) {
-			system("'cp' -f /etc/my.cnf.d/my.cnf /etc/my.cnf");
+		if (file_exists("/etc/mysql/my.cnf")) {
+			system("'cp' -f /etc/mysql/my.cnf /etc/my.cnf");
 		} elseif (file_exists("/etc/my.cnf._bck_")) {
 			system("'cp' -f /etc/my.cnf._bck_ /etc/my.cnf");
 		}

@@ -2,19 +2,19 @@
 
 kloxopath='/usr/local/lxlabs/kloxo'
 
-yum -y -q install python27 python27-devel python27-pip python27-setuptools \
-	python27-virtualenv >/dev/null 2>&1
+apt-get -y -q install python2.7 python2.7-dev python-pip python-setuptools \
+	python-virtualenv >/dev/null 2>&1
 
-yum install -y -q python python-devel python-virtualenv >/dev/null 2>&1
+apt-get install -y -q python python-dev python-virtualenv >/dev/null 2>&1
 
-yum remove -y -q python27-tools >/dev/null 2>&1
+apt-get remove -y -q python2.7-tools >/dev/null 2>&1
 
 # these would be installed automaticly by the client but I prefer to do it myself
-yum -y -q install gcc dialog augeas-libs openssl-devel libffi-devel \
-	redhat-rpm-config ca-certificates >/dev/null 2>&1
+apt-get -y -q install gcc dialog libaugeas0 libssl-dev libffi-dev \
+	ca-certificates >/dev/null 2>&1
 
 # install let
-yum -y -q install git >/dev/null 2>&1
+apt-get -y -q install git >/dev/null 2>&1
 cd ${kloxopath}
 if [ -d ${kloxopath}/letsencrypt ] ; then
 	'rm' -rf ${kloxopath}/letsencrypt >/dev/null 2>&1

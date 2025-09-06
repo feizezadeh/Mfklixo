@@ -15,7 +15,7 @@ if [ -f ${startapipath}/startapi.sh ] ; then
 	${startapipath}/startapi.sh --upgrade >/dev/null 2>&1
 	'cp' -f ${startapipath}/startapi.sh ${kloxopath}/startapi.sh/startapi.sh
 else
-	yum -y install git nc >/dev/null 2>&1
+	apt-get -y install git nc >/dev/null 2>&1
 
 	cd ${kloxopath}
 

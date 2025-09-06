@@ -6,19 +6,19 @@ class Spam__Spamassassin extends lxDriverClass
 	{
 		global $login;
 
-		$ret = lxshell_return("yum", "-y", "install", "spamassassin-toaster");
+		$ret = lxshell_return("apt-get", "-y", "install", "spamassassin");
 
 		if ($ret) {
 			throw new lxException($login->getThrow('install_failed'), '', 'spamassassin-toaster');
 		}
 
-		$ret2 = lxshell_return("yum", "-y", "install", "simscan-toaster");
+		$ret2 = lxshell_return("apt-get", "-y", "install", "simscan");
 
 		if ($ret2) {
 			throw new lxException($login->getThrow('install_failed'), '', 'simscan-toaster');
 		}
 
-		$ret3 = lxshell_return("yum", "-y", "install", "ripmime");
+		$ret3 = lxshell_return("apt-get", "-y", "install", "ripmime");
 
 		if ($ret2) {
 			throw new lxException($login->getThrow('install_failed'), '', 'ripmime');

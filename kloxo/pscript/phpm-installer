@@ -70,9 +70,9 @@ echo $x >>${main_path}/${base_name}_install.log
 
 if yum list ${src_name}u-cli >/dev/null 2>&1 ; then
 	pack_name="${src_name}u"
-elif yum list ${src_name}-cli >/dev/null 2>&1 ; then
+elif apt-cache search ${src_name}-cli >/dev/null 2>&1 ; then
 	pack_name="${src_name}"
-elif yum list ${src_name}w-cli >/dev/null 2>&1 ; then
+elif apt-cache search ${src_name}w-cli >/dev/null 2>&1 ; then
 	pack_name="${src_name}w"
 else
 	echo "- No PHP packages exists. Only detecting '${src_name}u', '${src_name}' or '${src_name}w'. Exit"
@@ -86,8 +86,8 @@ else
 	v=""
 fi
 
-if [ "$(rpm -qa yum-utils)" == "" ] ; then
-	yum install yum-utils -y
+if [ "$(dpkg -l apt-utils)" == "" ] ; then
+	apt-get install apt-utils -y
 fi
 
 if [ -f ${main_path}/${base_name} ] ; then
@@ -95,7 +95,7 @@ if [ -f ${main_path}/${base_name} ] ; then
 	'rm' -f ${main_path}/${base_name}
 fi
 
-pack_verrel=$(repoquery --qf='%{version}-%{release}' ${pack_name}-cli)
+pack_verrel=$(apt-cache policy ${pack_name}-cli | grep Candidate | awk '{print $2}')
 
 if [ -f ${main_path}/version ] ; then
 	if [ "${2}" == "-y" ] || [ "${2}" == "--force" ] ; then
@@ -103,14 +103,14 @@ if [ -f ${main_path}/version ] ; then
 	else
 		cver=$(cat ${main_path}/version)
 
-		if [ "$(rpm -qa rpmdevtools)" == "" ] ; then
-			yum install rpmdevtools -y
+		if [ "$(dpkg -l devscripts)" == "" ] ; then
+			apt-get install devscripts -y
 		fi
 
-		rpmdev-vercmp ${cver} ${pack_verrel} >/dev/null 2>&1
+		dpkg --compare-versions ${cver} ge ${pack_verrel} >/dev/null 2>&1
 		status="$?"
 
-		if [ "$?" != "12" ] ; then
+		if [ "$?" != "1" ] ; then
 			x="- '${pack_name}-${pack_verrel}' already installed"
 			echo $x
 			echo $x >>${main_path}/${base_name}_install.log
@@ -130,43 +130,43 @@ else
 	echo "${pack_verrel}" >${main_path}/version
 fi
 
-x="- Dependencies rpms... Please wait!"
+x="- Dependencies debs... Please wait!"
 echo $x
 echo $x >>${main_path}/${base_name}_install.log
 
 c=""
 
-x="-- Check dependencies rpms"
+x="-- Check dependencies debs"
 echo $x
 echo $x >>${main_path}/${base_name}_install.log
 
-repoquery --qf='%{name}' --requires --resolve ${pack_name}-*|egrep -iv '(php|mysql|postgresql|mariadb|httpd|openssl|nginx|tengine|pear1u)(.*)'|sort -u > ${main_path}/dependencies
+apt-cache depends ${pack_name}-*|egrep -iv '(php|mysql|postgresql|mariadb|apache2|openssl|nginx|tengine|pear)(.*)'|sort -u > ${main_path}/dependencies
 
-if [ "$(yum list|grep libmemcached10)" != "" ] ; then
-	libm1=$(yum info libmemcached10${v}|grep Version|awk '{print $3}')
+if [ "$(apt-cache search libmemcached10)" != "" ] ; then
+	libm1=$(apt-cache policy libmemcached10${v}|grep Candidate|awk '{print $2}')
 else
 	libml="0.0.0"
 fi
 
-libm2=$(yum info libmemcached${v}|grep Version|awk '{print $3}')
+libm2=$(apt-cache policy libmemcached${v}|grep Candidate|awk '{print $2}')
 
 if [[ $libm1 < $libm2 ]] ; then
-	if [ "$(rpm -qa libmemcached10)" != "" ] ; then
-		yum replace libmemcached10 --replace-with=libmemcached -y >/dev/null 2>&1
+	if [ "$(dpkg -l libmemcached10)" != "" ] ; then
+		apt-get install libmemcached -y >/dev/null 2>&1
 	fi
 	sed -i 's/libmemcached10/libmemcached/g' ${main_path}/dependencies ${main_path}/dependencies
 else
-	if [ "$(rpm -qa libmemcached)" != "" ] ; then
-		yum replace libmemcached --replace-with=libmemcached10 -y >/dev/null 2>&1
+	if [ "$(dpkg -l libmemcached)" != "" ] ; then
+		apt-get install libmemcached10 -y >/dev/null 2>&1
 	fi
 fi
 
-x="-- Install dependencies rpms"
+x="-- Install dependencies debs"
 echo $x
 echo $x >>${main_path}/${base_name}_install.log
-yum -y install $(cat ${main_path}/dependencies) --skip-broken >>${main_path}/${base_name}_install.log
+apt-get -y install $(cat ${main_path}/dependencies) --allow-unauthenticated >>${main_path}/${base_name}_install.log
 
-x="- Download all rpms (not including debuginfo)... Please wait!"
+x="- Download all debs... Please wait!"
 echo $x
 echo $x >>${main_path}/${base_name}_install.log
 
@@ -174,26 +174,17 @@ if [ -f ${main_path}/etc ] ; then
 	find ${main_path}/etc ! \( -name "_*.ini" -or -name "*_used.ini" \) -exec rm -rf {} \;
 fi
 
-yumdownloader ${pack_name}-* mod_${pack_name} -x *debuginfo* >>${main_path}/${base_name}_install.log
-#'rm' -rf *-debuginfo*
+apt-get download ${pack_name}-* mod_${pack_name} >>${main_path}/${base_name}_install.log
 
-#rpmrebuild -v --change-spec-whole='sed -e "s/^Prefix:.*/Prefix: \//"' \
-#	--change-spec-whole='sed -e "s/^\(.*:[ ]\+\..*\)/#ERROR \1/"' \
-#	--notest-install -p -d ${main_path}/rpms-patch ${main_path}/rpms-original \
-#	>>${main_path}/${base_name}_install.log
-#rpm -i --dbpath /rpm force --root ${main_path} --nopre --nopost --nodeps ${main_path}/rpms-patch \
-#	>>${main_path}/${base_name}_install.log
-
-
-x="- Extract all rpms to '${main_path}'"
+x="- Extract all debs to '${main_path}'"
 echo $x
 echo $x >>${main_path}/${base_name}_install.log
 
-for i in $(ls ./*.rpm) ; do
-	rpm2cpio $i | cpio -idmv >/dev/null 2>$1
+for i in $(ls ./*.deb) ; do
+	dpkg -x $i .
 done
 
-'rm' -rf ./*.rpm
+'rm' -rf ./*.deb
 
 cd /
 sh /script/phpm-config-setup $base_name

@@ -2892,6 +2892,22 @@ class HtmlLib
 			<input type="hidden" id="<?= $str ?>" name="<?= $str ?>" value="<?= $v ?>">
 <?php
 					}
+
+	function print_update_form($vlist, $var_list)
+	{
+		$this->print_begin_form("update");
+		$this->print_begin_table();
+		foreach ($var_list as $var) {
+			$this->print_table_entry(get_classvar_description('serverweb', $var)[2], $this->print_variable($vlist, $var));
+		}
+		$this->print_end_table();
+		$this->print_end_form();
+	}
+
+	function print_variable($vlist, $var)
+	{
+		$this->print_select("frm_{$var}", $vlist[$var][1]);
+	}
 				}
 			} else {
 				if (!$value) {

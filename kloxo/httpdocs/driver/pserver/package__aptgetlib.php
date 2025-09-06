@@ -1,17 +1,17 @@
 <?php 
 
 
-class package__yum extends lxDriverClass {
+class package__aptget extends lxDriverClass {
 
-static function getYumCommand()
+static function getAptgetCommand()
 {
-	return 'yum check-update';
+	return 'apt-get update';
 }
 
 static function getPackages($nocache = false)
 {
 
-	$cmd = self::getYumCommand();
+	$cmd = self::getAptgetCommand();
 	$file = fix_nname_to_be_variable($cmd);
 	$file = "__path_program_root/cache/$file";
 
@@ -62,11 +62,11 @@ static function getPackages($nocache = false)
 
 static function doUpdate($list)
 {
-	$cmd = self::getYumCommand();
+	$cmd = self::getAptgetCommand();
 	$file = fix_nname_to_be_variable($cmd);
 	$file = "__path_program_root/cache/$file";
 
-	lxshell_return("yum", "-y", "install", implode(" ", $list));
+	lxshell_return("apt-get", "-y", "install", implode(" ", $list));
 	lunlink($file);
 
 }

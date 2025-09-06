@@ -2,7 +2,7 @@
 
 if [ "$(grep envID /proc/self/status)" == "" ] ; then
 	if [ "$(rpm -qa kexec-tools)" == "" ] ; then
-		yum install kexec-tools -y
+		apt-get install kexec-tools -y
 	fi
 
 	currentkernel=$(uname -r)

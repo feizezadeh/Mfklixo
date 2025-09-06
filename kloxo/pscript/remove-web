@@ -1,0 +1,15 @@
+#!/bin/sh
+
+DRIVER=$1
+
+case $DRIVER in
+    apache)
+        yum remove httpd -y
+        ;;
+    nginx)
+        yum remove nginx -y
+        ;;
+    lighttpd)
+        yum remove lighttpd -y
+        ;;
+esac

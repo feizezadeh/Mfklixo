@@ -1,5 +1,5 @@
 all:
-	#yum install openssl-devel -y
+	#apt-get install libssl-dev -y
 
 	rm -f closeinput
 	rm -f closeallinput

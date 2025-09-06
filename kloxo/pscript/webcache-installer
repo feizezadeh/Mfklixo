@@ -39,9 +39,9 @@ fi
 webcache_select="webcache_${1}"
 
 if [ -z "${webcache_select}" ] ; then
-	yum ${type} ${webcache_select} -y
-	
-	chkconfig ${webcache_select} off 2>/dev/null
+	apt-get ${type} ${webcache_select} -y
+
+	update-rc.d ${webcache_select} disable 2>/dev/null
 	service ${webcache_select} stop
 else
 	echo "- Input not match"
@@ -52,4 +52,3 @@ fi
 . /script/counter-end.inc
 
 echo
-

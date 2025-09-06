@@ -25,7 +25,7 @@ $__emessage['ssh_root_password_access'] = "You have not disabled password based 
 $__emessage['already_exists'] = "The resource of name [%s] already exists.";
 $__emessage['lxguard_not_configured'] = "Lxguard for this server is not configured. Click <url:k[class]=pserver&k[nname]=[%_server_%]&a=show&o=lxguard>[here]</url> to configure Lxguard since it is very important that you understand what it does. Lxguard is critical for the security of your server, at the same time, it can block your own IPaddress from accessing the server, which can be frustrating if you don't know what's happening.";
 $__emessage['root_cannot_extract_to_existing_dir'] = "Directory you provided already exists. Root user cannot extract archive into an existing directory. Please provide the name of a directory that doesn't exist in the system.";
-$__emessage['no_imagemagick'] = "There is no imagemagick in the system. You can install imagemagick by running <b>yum -y install imagemagick</b>.";
+$__emessage['no_imagemagick'] = "There is no imagemagick in the system. You can install imagemagick by running <b>apt-get -y install imagemagick</b>.";
 $__emessage['warn_license_limit'] = "You are very close to your license limit for [%s]. If the system goes over limit for [%s] the interface will stop working and you won't be able to manage your system. Please increase your license at client.lxlabs.com and update by click <url:o=license&a=show>[here]</url>.";
 $__emessage['file_already_exists'] = "The file [%s] already exists.";
 $__emessage['contact_set_but_not_correct'] = "Your Contact Information doesn't appear to be a valid email address. Click <url:a=updateform&sa=information>[here]</url> to fix it.";
@@ -212,8 +212,8 @@ $__information['lxbackup_updateform_restore_from_file_pre'] =	"<p>You can upload
 	"Then come here, and click on <b>directory</b> icon on the right in the <b>restore</b> form, ".
 	"and it will allow you to select the particular file. Then click on <b>start restore process</b>.</p>";
 
-$__information['phpini_updateform_edit_admin_pre'] = "<p>Installing PHP modules (like xcache/ioncube/zend/suhosin) rpm via yum. Installing these modules depend on php branch and version installed on system.</p>" .
-	"<p>If using 'php-branch' in 'php used' and using php53u, install with 'yum install php53u-xcache' and then try 'php -m' for to make sure.</p>" .
+$__information['phpini_updateform_edit_admin_pre'] = "<p>Installing PHP modules (like xcache/ioncube/zend/suhosin) rpm via apt-get. Installing these modules depend on php branch and version installed on system.</p>" .
+	"<p>If using 'php-branch' in 'php used' and using php5.3, install with 'apt-get install php5.3-xcache' and then try 'php -m' for to make sure.</p>" .
 	"<p>Ask to <a href='http://forum.mratwork.com' target='_blank'>forum</a> to know how to install php extension for 'multiple php'. Generally, using 'sh /script/phpm-extension-installer'.</p>" .
 	"<p>Click <url:o=serverweb&a=show>[here]</url> to install another php for 'Multiple PHP'.</p>" .
 	"<p><b>Note:</b></p>" .
@@ -443,7 +443,7 @@ $__information['servermail_updateform_update_pre'] = "<p>Set 'My Name' with doma
 
 
 $__information['updateform_switchprogram_pre'] = "<p>Switching Programs will take a while, since it needs to remove the old program from the system, ". 
-	"and install the new one using yum.</p>".
+	"and install the new one using apt-get.</p>".
 	"<p>The log for this will be available in the 'shell_exec' file. All your information will be transparently migrated.</p>".
 	"<p>You will need to wait one minute before the new service properly restarts.</p>".
 	"<p>Add '<b>&lt;?php header(\"X-Hiawatha-Cache: 10\"); ?&gt;</b>' in top of index.php to boosting Hiawatha performance. ".

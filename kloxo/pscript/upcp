@@ -14,8 +14,8 @@ if [ "$(hostname -f)" == "$(hostname -s)" ] ; then
 	exit
 fi
 
-if [ "$(rpm -qa yum-plugin-replace)" == "" ] ; then
-	yum -y install yum-plugin-replace
+if [ "$(dpkg -l apt-show-versions)" == "" ] ; then
+	apt-get -y install apt-show-versions
 fi
 
 sh /script/fixrepo
@@ -45,12 +45,12 @@ if [ "$(rpm -qa lxphp)" != "" ] ; then
 fi
 
 if [ "$(rpm -qa php52s)" != "" ] ; then
-	yum remove php52s -y
+	apt-get remove php5.2 -y
 	sh /script/phpm-installer php53s
 fi
 
 if [ "$(rpm -qa php53s)" != "" ] ; then
-	yum remove php53s* -y
+	apt-get remove php5.3* -y
 	rpm -e php53s-fpm --noscript
 
 	sh /script/phpm-installer php53s
@@ -65,7 +65,7 @@ elif [ "$(rpm -qa MariaDB-server)" != "" ] ; then
 else
 	if [ "$(rpm -qa mysql)" != "" ] ; then
 		echo "Replace mysql to MariaDB-server"
-		yum replace mysql --replace-with=MariaDB-server -y
+		apt-get install mariadb-server -y
 	fi
 fi
 

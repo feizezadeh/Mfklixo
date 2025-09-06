@@ -6,7 +6,7 @@ class Spam__bogofilter extends lxDriverClass
 	{
 		global $login;
 
-		$ret = lxshell_return("yum", "-y", "install", "bogofilter");
+		$ret = lxshell_return("apt-get", "-y", "install", "bogofilter");
 
 		if ($ret) {
 			throw new lxException($login->getThrow('install_failed'), '', 'bogofilter');

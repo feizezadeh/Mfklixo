@@ -1,4 +1,4 @@
 #!/bin/sh
-yum -y install fcgi-devel
+apt-get -y install libfcgi-dev
 gem install -y rails
 gem install -y fcgi

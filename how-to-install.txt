@@ -2,11 +2,11 @@ A. pre-install -- better for fresh install
 
     cd /
 
-    # update centos to latest version
-    yum update -y
+    # update debian to latest version
+    apt-get update -y
     # install some packages like package-cleanup, etc
-    yum install yum-utils yum-priorities vim-minimal subversion curl zip unzip -y
-    yum install telnet wget -y
+    apt-get install yum-utils yum-priorities vim-minimal subversion curl zip unzip -y
+    apt-get install telnet wget -y
 
     cd /
 

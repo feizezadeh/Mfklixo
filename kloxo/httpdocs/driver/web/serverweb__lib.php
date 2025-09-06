@@ -17,64 +17,103 @@ class serverweb__ extends lxDriverClass
 
 		switch ($subaction) {
 			case "apache_optimize":
-				$this->set_apache_optimize();
-
+				$this->dbactionUpdate_apache_optimize();
 				break;
 			case "fix_chownchmod":
-				$this->set_fix_chownchmod();
-
+				$this->dbactionUpdate_fix_chownchmod();
 				break;
-
 			case "fix_chownchmod_user":
-				$this->set_fix_chownchmod_user();
-
+				$this->dbactionUpdate_fix_chownchmod_user();
 				break;
 			case "mysql_convert":
-				$this->set_mysql_convert();
-
+				$this->dbactionUpdate_mysql_convert();
 				break;
 			case "php_type":
-				$this->set_php_type();
-
+				$this->dbactionUpdate_php_type();
 				break;
-
 			case "php_branch":
-				$this->set_php_branch();
-
+				$this->dbactionUpdate_php_branch();
 				break;
-
 			case "multiple_php_install":
-				$this->set_multiple_php_install();
-
+				$this->dbactionUpdate_multiple_php_install();
 				break;
-
 			case "multiple_php_remove":
-				$this->set_multiple_php_remove();
-
+				$this->dbactionUpdate_multiple_php_remove();
 				break;
-
 			case "multiple_php_activate":
-				$this->set_multiple_php_activate();
-
+				$this->dbactionUpdate_multiple_php_activate();
 				break;
-
 			case "php_used":
-				$this->set_php_used();
-
+				$this->dbactionUpdate_php_used();
 				break;
-
 			case "enable_php52m_fpm":
-
-				$this->set_php52m_fpm();
-
+				$this->dbactionUpdate_enable_php52m_fpm();
 				break;
-
 			case "pagespeed_clear_cache":
-				$this->set_pagespeed_clear_cache();
-
+				$this->dbactionUpdate_pagespeed_clear_cache();
 				break;
 		}
 	}
+
+    private function dbactionUpdate_apache_optimize()
+    {
+        $this->set_apache_optimize();
+    }
+
+    private function dbactionUpdate_fix_chownchmod()
+    {
+        $this->set_fix_chownchmod();
+    }
+
+    private function dbactionUpdate_fix_chownchmod_user()
+    {
+        $this->set_fix_chownchmod_user();
+    }
+
+    private function dbactionUpdate_mysql_convert()
+    {
+        $this->set_mysql_convert();
+    }
+
+    private function dbactionUpdate_php_type()
+    {
+        $this->set_php_type();
+    }
+
+    private function dbactionUpdate_php_branch()
+    {
+        $this->set_php_branch();
+    }
+
+    private function dbactionUpdate_multiple_php_install()
+    {
+        $this->set_multiple_php_install();
+    }
+
+    private function dbactionUpdate_multiple_php_remove()
+    {
+        $this->set_multiple_php_remove();
+    }
+
+    private function dbactionUpdate_multiple_php_activate()
+    {
+        $this->set_multiple_php_activate();
+    }
+
+    private function dbactionUpdate_php_used()
+    {
+        $this->set_php_used();
+    }
+
+    private function dbactionUpdate_enable_php52m_fpm()
+    {
+        $this->set_php52m_fpm();
+    }
+
+    private function dbactionUpdate_pagespeed_clear_cache()
+    {
+        $this->set_pagespeed_clear_cache();
+    }
 
 	function set_apache_optimize()
 	{
@@ -451,10 +490,10 @@ class serverweb__ extends lxDriverClass
 		$ehcdpath = '/etc/httpd/conf.d';
 		$haecdpath = '/opt/configs/apache/etc/conf.d';
 	/*
-		$installed = isRpmInstalled('yum-plugin-replace');
+		$installed = isRpmInstalled('apt-show-versions');
 
 		if (!$installed) {
-			setRpmInstalled("yum-plugin-replace");
+			setRpmInstalled("apt-show-versions");
 		}
 	*/
 		$scripting = '/script/set-php-branch';

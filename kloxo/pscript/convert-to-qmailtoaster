@@ -1,6 +1,6 @@
 #!/bin/sh
 
-if [ "$(rpm -qa qmail-toaster)" != "" ] ; then
+if [ "$(dpkg -l qmail-toaster)" != "" ] ; then
 	echo
 	echo "Mail server already use qmail-toaster"
 	echo
@@ -14,10 +14,10 @@ else
 	echo
 fi
 
-yum remove qmail* vpopmail* *-toaster exim* dovecot* postfix* -y
-rpm -e --noscripts vpopmail
-yum clean all
-yum install *toaster -y
+apt-get remove qmail* vpopmail* *-toaster exim* dovecot* postfix* -y
+dpkg -r vpopmail
+apt-get clean all
+apt-get install qmail-toaster -y
 
 sh /script/fix-qmail-assign
 'rm' -f /etc/xinetd.d/*_lxa

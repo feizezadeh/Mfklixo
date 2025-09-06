@@ -1,14 +1,14 @@
 #!/bin/sh
 
-if [ "$(rpm -qa memcached)" == "" ] ; then
-	yum install memcached -y
+if [ "$(dpkg -l memcached)" == "" ] ; then
+	apt-get install memcached -y
 	sh /script/enable-service memcached
 	echo "Install 'memcached'"
 else
 	echo "Already exists 'memcached'"
 fi
 
-cfile="/etc/sysconfig/memcached"
+cfile="/etc/memcached.conf"
 
 ## MR -- protect from DDOS
 if [ -f $cfile ] ; then

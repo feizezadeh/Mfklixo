@@ -1,6 +1,6 @@
 #!/bin/sh
 
-yum install clamav* clamd --exclude=clamav-milter* --exclude=clamav-unofficial*  -y
+apt-get install clamav-daemon clamav clamav-freshclam -y
 
 
 #if [ "$(id -u 'clamav' 1>/dev/null 2>&1; echo $?)" == "0" ] ; then

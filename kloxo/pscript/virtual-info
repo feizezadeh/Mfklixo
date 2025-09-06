@@ -1,7 +1,7 @@
 #!/bin/sh
 
 if [ "$(rpm -qa|grep 'virt-what')" == "" ] ; then
-	yum install virt-what -y
+	apt-get install virt-what -y
 fi
 
 p=$(virt-what)

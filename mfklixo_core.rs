@@ -5963,6 +5963,401 @@ async fn system_skeleton_post(
 }
 
 // ============================================================================
+// 10B. APPLICATION MANAGER (NODE.JS / PYTHON / REACT SPA)
+// ============================================================================
+
+#[derive(Debug, Deserialize)]
+pub struct AppCreatePayload {
+    pub name: String,
+    pub runtime: String, // "nodejs" | "python" | "react"
+    pub domain: String,
+    pub port: Option<u16>,
+    pub start_cmd: Option<String>,
+    pub env_vars: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct AppActionPayload {
+    pub name: Option<String>,
+    pub action: Option<String>, // "start" | "stop" | "restart" | "install" | "build" | "logs"
+}
+
+/// `GET /api/v1/apps`
+async fn apps_list(State(state): State<AppState>, claims: Claims) -> ApiResult<Value> {
+    let path = state.cfg.kloxo_etc_dir.join("apps.json");
+    let stored: Vec<Value> = sys::read_json_store(&path, Vec::new());
+
+    let mut apps = Vec::new();
+    for mut item in stored {
+        let owner = item.get("owner").and_then(|v| v.as_str()).unwrap_or("admin").to_string();
+        if !claims.is_superadmin() && owner != claims.sub {
+            continue;
+        }
+        let name = item.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let runtime = item.get("runtime").and_then(|v| v.as_str()).unwrap_or("nodejs").to_string();
+        let status = if runtime == "react" {
+            "static"
+        } else if sys::is_service_active(&format!("kloxo-app-{}.service", name)).await {
+            "running"
+        } else {
+            "stopped"
+        };
+        if let Some(obj) = item.as_object_mut() {
+            obj.insert("status".to_string(), json!(status));
+        }
+        apps.push(item);
+    }
+
+    Ok(Json(json!({
+        "success": true,
+        "apps": apps
+    })))
+}
+
+/// `POST /api/v1/apps`
+async fn apps_create(
+    State(state): State<AppState>,
+    claims: Claims,
+    Json(payload): Json<AppCreatePayload>,
+) -> ApiResult<Value> {
+    let name = payload.name.trim().to_lowercase();
+    sys::validate_ident(&name, "app name")?;
+
+    let domain = payload.domain.trim().to_lowercase();
+    sys::validate_domain(&domain)?;
+
+    let runtime = payload.runtime.trim().to_lowercase();
+    if runtime != "nodejs" && runtime != "python" && runtime != "react" {
+        return Err(ApiError::BadRequest(
+            "Runtime must be nodejs, python, or react".to_string(),
+        ));
+    }
+
+    let path = state.cfg.kloxo_etc_dir.join("apps.json");
+    // ponytail: file store read-modify-write; add mutex if concurrent app creations occur
+    let mut apps: Vec<Value> = sys::read_json_store(&path, Vec::new());
+
+    if let Some(existing) = apps.iter().find(|a| a.get("name").and_then(|v| v.as_str()) == Some(&name)) {
+        let existing_owner = existing.get("owner").and_then(|v| v.as_str()).unwrap_or("admin");
+        if !claims.is_superadmin() && existing_owner != claims.sub {
+            return Err(ApiError::Forbidden("App name is already in use by another user".to_string()));
+        }
+    }
+
+    let used_ports: Vec<u16> = apps
+        .iter()
+        .filter(|a| a.get("name").and_then(|v| v.as_str()) != Some(&name))
+        .filter_map(|a| a.get("port").and_then(|v| v.as_u64()).map(|p| p as u16))
+        .collect();
+
+    let port = payload.port.filter(|p| *p >= 3001 && *p <= 9999).unwrap_or_else(|| {
+        (4001..5000).find(|p| !used_ports.contains(p)).unwrap_or(4001)
+    });
+
+    let owner = claims.sub.clone();
+    let app_dir = state.cfg.home_base_dir.join(&owner).join("apps").join(&name);
+    let _ = fs::create_dir_all(&app_dir);
+
+    let default_cmd = match runtime.as_str() {
+        "nodejs" => "/usr/bin/node server.js".to_string(),
+        "python" => "/usr/bin/python3 app.py".to_string(),
+        _ => "npm run build".to_string(),
+    };
+    let start_cmd = payload
+        .start_cmd
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .unwrap_or(&default_cmd)
+        .to_string();
+
+    if start_cmd.chars().any(|c| matches!(c, ';' | '&' | '|' | '`' | '$' | '>' | '<' | '\n' | '\r')) {
+        return Err(ApiError::BadRequest(
+            "Start command contains disallowed shell characters".to_string(),
+        ));
+    }
+
+    let env_vars = payload.env_vars.unwrap_or_default();
+    let env_content = format!("PORT={}\nNODE_ENV=production\n{}\n", port, env_vars.trim());
+    let _ = fs::write(app_dir.join(".env"), env_content);
+
+    // Scaffold starter files if missing so the app works immediately out of the box
+    match runtime.as_str() {
+        "nodejs" => {
+            let server_js = app_dir.join("server.js");
+            if !server_js.exists() {
+                let code = format!(
+                    "const http = require('http');\nconst port = process.env.PORT || {port};\nhttp.createServer((req, res) => {{\n  res.writeHead(200, {{ 'Content-Type': 'text/html; charset=utf-8' }});\n  res.end('<html><body style=\"font-family:sans-serif;background:#0f172a;color:#f8fafc;padding:3rem;text-align:center;\"><h1 style=\"color:#38bdf8;\">Node.js App ({name}) is Running!</h1><p>Domain: <b>{domain}</b> | Port: <b>' + port + '</b> | Node ' + process.version + '</p></body></html>');\n}}).listen(port, '127.0.0.1');\n"
+                );
+                let _ = fs::write(&server_js, code);
+            }
+            let pkg_json = app_dir.join("package.json");
+            if !pkg_json.exists() {
+                let pkg = json!({
+                    "name": name,
+                    "version": "1.0.0",
+                    "main": "server.js",
+                    "scripts": { "start": "node server.js" }
+                });
+                let _ = fs::write(&pkg_json, serde_json::to_string_pretty(&pkg).unwrap_or_default());
+            }
+        }
+        "python" => {
+            let app_py = app_dir.join("app.py");
+            if !app_py.exists() {
+                let code = format!(
+                    "import os, sys\nfrom http.server import HTTPServer, BaseHTTPRequestHandler\n\nPORT = int(os.environ.get('PORT', {port}))\n\nclass Handler(BaseHTTPRequestHandler):\n    def do_GET(self):\n        self.send_response(200)\n        self.send_header('Content-Type', 'text/html; charset=utf-8')\n        self.end_headers()\n        html = f'<html><body style=\"font-family:sans-serif;background:#0f172a;color:#f8fafc;padding:3rem;text-align:center;\"><h1 style=\"color:#facc15;\">Python App ({name}) is Running!</h1><p>Domain: <b>{domain}</b> | Port: <b>{{PORT}}</b> | Python {{sys.version.split()[0]}}</p></body></html>'\n        self.wfile.write(html.encode('utf-8'))\n\nif __name__ == '__main__':\n    HTTPServer(('127.0.0.1', PORT), Handler).serve_forever()\n"
+                );
+                let _ = fs::write(&app_py, code);
+            }
+            let req_txt = app_dir.join("requirements.txt");
+            if !req_txt.exists() {
+                let _ = fs::write(&req_txt, "# Add pip packages here (e.g. flask, fastapi, uvicorn, gunicorn)\n");
+            }
+        }
+        _ => {
+            let index_html = app_dir.join("index.html");
+            if !index_html.exists() {
+                let code = format!(
+                    "<!DOCTYPE html>\n<html>\n<head>\n  <meta charset=\"utf-8\" />\n  <title>{name} - React SPA</title>\n  <script crossorigin src=\"https://unpkg.com/react@18/umd/react.production.min.js\"></script>\n  <script crossorigin src=\"https://unpkg.com/react-dom@18/umd/react-dom.production.min.js\"></script>\n</head>\n<body style=\"margin:0;font-family:sans-serif;background:#0f172a;color:#f8fafc;display:flex;align-items:center;justify-content:center;height:100vh;\">\n  <div id=\"root\"></div>\n  <script>\n    const e = React.createElement;\n    ReactDOM.createRoot(document.getElementById('root')).render(\n      e('div', {{ style: {{ textAlign: 'center', padding: '2rem' }} }},\n        e('h1', {{ style: {{ color: '#61dafb' }} }}, 'React App ({name}) is Live!'),\n        e('p', null, 'Served directly via Nginx SPA routing on {domain}'),\n        e('code', {{ style: {{ color: '#94a3b8' }} }}, '{app_dir_str}')\n      )\n    );\n  </script>\n</body>\n</html>\n",
+                    app_dir_str = app_dir.to_string_lossy()
+                );
+                let _ = fs::write(&index_html, code);
+            }
+        }
+    }
+
+    // Resolve Linux user for permissions & systemd (fallback to www-data if user doesn't exist in /etc/passwd)
+    let sys_user = if Command::new("id")
+        .arg(&owner)
+        .output()
+        .await
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+    {
+        owner.clone()
+    } else {
+        "www-data".to_string()
+    };
+
+    let _ = Command::new("chown")
+        .args(["-R", &format!("{}:{}", sys_user, sys_user), &app_dir.to_string_lossy()])
+        .output()
+        .await;
+    let _ = Command::new("chmod")
+        .args(["755", &state.cfg.home_base_dir.join(&owner).to_string_lossy()])
+        .output()
+        .await;
+
+    // Configure systemd service for nodejs / python
+    let service_name = format!("kloxo-app-{}.service", name);
+    if runtime != "react" {
+        let unit = format!(
+            "[Unit]\nDescription=Mfklixo App {name} ({runtime})\nAfter=network.target\n\n[Service]\nType=simple\nUser={sys_user}\nWorkingDirectory={dir}\nEnvironmentFile=-{dir}/.env\nEnvironment=PORT={port}\nExecStart={start_cmd}\nRestart=always\nRestartSec=3\n\n[Install]\nWantedBy=multi-user.target\n",
+            dir = app_dir.to_string_lossy()
+        );
+        let _ = fs::write(PathBuf::from("/etc/systemd/system").join(&service_name), unit);
+        let _ = Command::new("systemctl").arg("daemon-reload").output().await;
+        let _ = Command::new("systemctl").args(["enable", "--now", &service_name]).output().await;
+        let _ = Command::new("systemctl").args(["restart", &service_name]).output().await;
+    }
+
+    // Configure Nginx vhost (/etc/nginx/conf.d/00-app-{name}.conf takes priority)
+    let ssl_cert = state.cfg.kloxo_ssl_dir.join(format!("{}.crt", domain));
+    let ssl_key = state.cfg.kloxo_ssl_dir.join(format!("{}.key", domain));
+    let (cert_path, key_path) = if ssl_cert.exists() && ssl_key.exists() {
+        (ssl_cert.to_string_lossy().to_string(), ssl_key.to_string_lossy().to_string())
+    } else {
+        let fallback = state.cfg.kloxo_etc_dir.join("program.pem").to_string_lossy().to_string();
+        (fallback.clone(), fallback)
+    };
+
+    let nginx_conf = if runtime == "react" {
+        format!(
+            "server {{\n    listen 80;\n    listen 443 ssl;\n    server_name {d} www.{d};\n    ssl_certificate {cert};\n    ssl_certificate_key {key};\n    root {dir};\n    index index.html;\n    location / {{\n        try_files $uri $uri/ /dist$uri /build$uri /dist/index.html /build/index.html /index.html;\n    }}\n}}\n",
+            d = domain,
+            cert = cert_path,
+            key = key_path,
+            dir = app_dir.to_string_lossy()
+        )
+    } else {
+        format!(
+            "server {{\n    listen 80;\n    listen 443 ssl;\n    server_name {d} www.{d};\n    ssl_certificate {cert};\n    ssl_certificate_key {key};\n    location / {{\n        proxy_pass http://127.0.0.1:{port};\n        proxy_http_version 1.1;\n        proxy_set_header Upgrade $http_upgrade;\n        proxy_set_header Connection 'upgrade';\n        proxy_set_header Host $host;\n        proxy_set_header X-Real-IP $remote_addr;\n        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n        proxy_set_header X-Forwarded-Proto $scheme;\n    }}\n}}\n",
+            d = domain,
+            cert = cert_path,
+            key = key_path,
+            port = port
+        )
+    };
+
+    let _ = fs::write(format!("/etc/nginx/conf.d/00-app-{}.conf", name), &nginx_conf);
+    let _ = fs::write(state.cfg.kloxo_httpd_dir.join(format!("00-app-{}.conf", name)), &nginx_conf);
+    let _ = Command::new("systemctl").args(["reload", "nginx"]).output().await;
+
+    apps.retain(|a| a.get("name").and_then(|v| v.as_str()) != Some(&name));
+    let app_obj = json!({
+        "name": name,
+        "owner": owner,
+        "runtime": runtime,
+        "domain": domain,
+        "port": port,
+        "app_dir": app_dir.to_string_lossy(),
+        "start_cmd": start_cmd,
+        "env_vars": env_vars,
+        "created_at": Utc::now().to_rfc3339()
+    });
+    apps.push(app_obj.clone());
+    sys::write_json_store(&path, &apps)?;
+
+    Ok(Json(json!({
+        "success": true,
+        "message": format!("Application {} ({}) deployed on {}", name, runtime, domain),
+        "app": app_obj
+    })))
+}
+
+/// `POST /api/v1/apps/action`
+async fn apps_action(
+    State(state): State<AppState>,
+    claims: Claims,
+    Json(payload): Json<AppActionPayload>,
+) -> ApiResult<Value> {
+    let name = payload
+        .name
+        .ok_or_else(|| ApiError::BadRequest("App name is required".to_string()))?;
+    sys::validate_ident(&name, "app name")?;
+    let action = payload
+        .action
+        .ok_or_else(|| ApiError::BadRequest("Action is required".to_string()))?;
+
+    let path = state.cfg.kloxo_etc_dir.join("apps.json");
+    let apps: Vec<Value> = sys::read_json_store(&path, Vec::new());
+    let app = apps
+        .iter()
+        .find(|a| a.get("name").and_then(|v| v.as_str()) == Some(&name))
+        .ok_or_else(|| ApiError::NotFound(format!("Application {} not found", name)))?;
+
+    let owner = app.get("owner").and_then(|v| v.as_str()).unwrap_or("admin");
+    if !claims.is_superadmin() && owner != claims.sub {
+        return Err(ApiError::Forbidden("Access denied to this application".to_string()));
+    }
+
+    let app_dir = app.get("app_dir").and_then(|v| v.as_str()).unwrap_or("");
+    let runtime = app.get("runtime").and_then(|v| v.as_str()).unwrap_or("nodejs");
+    let svc = format!("kloxo-app-{}.service", name);
+
+    let output_text = match action.as_str() {
+        "start" | "stop" | "restart" => {
+            let out = Command::new("systemctl")
+                .args([action.as_str(), &svc])
+                .output()
+                .await
+                .map_err(|e| ApiError::Internal(e.to_string()))?;
+            format!(
+                "Service {} {}: {}",
+                svc,
+                action,
+                String::from_utf8_lossy(&out.stderr)
+            )
+        }
+        "install" => {
+            let out = if runtime == "python" {
+                Command::new("bash")
+                    .args([
+                        "-c",
+                        &format!(
+                            "cd '{}' && python3 -m venv venv && ./venv/bin/pip install -r requirements.txt 2>&1",
+                            app_dir
+                        ),
+                    ])
+                    .output()
+                    .await
+                    .map_err(|e| ApiError::Internal(e.to_string()))?
+            } else {
+                Command::new("bash")
+                    .args(["-c", &format!("cd '{}' && npm install 2>&1", app_dir)])
+                    .output()
+                    .await
+                    .map_err(|e| ApiError::Internal(e.to_string()))?
+            };
+            String::from_utf8_lossy(&out.stdout).to_string()
+        }
+        "build" => {
+            let out = Command::new("bash")
+                .args(["-c", &format!("cd '{}' && npm run build 2>&1", app_dir)])
+                .output()
+                .await
+                .map_err(|e| ApiError::Internal(e.to_string()))?;
+            String::from_utf8_lossy(&out.stdout).to_string()
+        }
+        "logs" => {
+            let out = Command::new("journalctl")
+                .args(["-u", &svc, "-n", "80", "--no-pager"])
+                .output()
+                .await
+                .map_err(|e| ApiError::Internal(e.to_string()))?;
+            String::from_utf8_lossy(&out.stdout).to_string()
+        }
+        _ => return Err(ApiError::BadRequest("Unsupported action".to_string())),
+    };
+
+    Ok(Json(json!({
+        "success": true,
+        "message": format!("Action '{}' completed for {}", action, name),
+        "output": output_text
+    })))
+}
+
+/// `DELETE /api/v1/apps`
+async fn apps_delete(
+    State(state): State<AppState>,
+    claims: Claims,
+    Query(q): Query<HashMap<String, String>>,
+    body: Option<Json<Value>>,
+) -> ApiResult<Value> {
+    let name = q
+        .get("name")
+        .cloned()
+        .or_else(|| {
+            body.and_then(|b| {
+                b.0.get("name")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string())
+            })
+        })
+        .ok_or_else(|| ApiError::BadRequest("App name is required".to_string()))?;
+    sys::validate_ident(&name, "app name")?;
+
+    let path = state.cfg.kloxo_etc_dir.join("apps.json");
+    let mut apps: Vec<Value> = sys::read_json_store(&path, Vec::new());
+    let Some(app) = apps.iter().find(|a| a.get("name").and_then(|v| v.as_str()) == Some(&name)) else {
+        return Err(ApiError::NotFound(format!("App {} not found", name)));
+    };
+
+    let owner = app.get("owner").and_then(|v| v.as_str()).unwrap_or("admin");
+    if !claims.is_superadmin() && owner != claims.sub {
+        return Err(ApiError::Forbidden("You do not own this application".to_string()));
+    }
+
+    let svc = format!("kloxo-app-{}.service", name);
+    let _ = Command::new("systemctl").args(["disable", "--now", &svc]).output().await;
+    let _ = fs::remove_file(PathBuf::from("/etc/systemd/system").join(&svc));
+    let _ = Command::new("systemctl").arg("daemon-reload").output().await;
+
+    let _ = fs::remove_file(format!("/etc/nginx/conf.d/00-app-{}.conf", name));
+    let _ = fs::remove_file(state.cfg.kloxo_httpd_dir.join(format!("00-app-{}.conf", name)));
+    let _ = Command::new("systemctl").args(["reload", "nginx"]).output().await;
+
+    apps.retain(|a| a.get("name").and_then(|v| v.as_str()) != Some(&name));
+    sys::write_json_store(&path, &apps)?;
+
+    Ok(Json(json!({
+        "success": true,
+        "message": format!("Application {} removed", name)
+    })))
+}
+
+// ============================================================================
 // 11. TOKIO BACKGROUND WATCHDOG WORKER
 // ============================================================================
 
@@ -6057,7 +6452,14 @@ fn build_v1_router() -> Router<AppState> {
         .route("/system/tickets", get(support_tickets_list).post(support_tickets_create))
         .route("/support/tickets", get(support_tickets_list).post(support_tickets_create))
         .route("/support/messages", get(support_messages_list).post(support_messages_create))
-        // Domains, Databases, Mail, FTP, Clients, Cron & Network IPs
+        // Domains, Apps, Databases, Mail, FTP, Clients, Cron & Network IPs
+        .route(
+            "/apps",
+            get(apps_list)
+                .post(apps_create)
+                .delete(apps_delete),
+        )
+        .route("/apps/action", post(apps_action))
         .route(
             "/domains",
             get(domains_list)

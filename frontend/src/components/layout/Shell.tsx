@@ -136,6 +136,7 @@ export default function Shell({ children }: ShellProps) {
         { name: 'Overview', href: '/', icon: LayoutDashboard },
         ...(isSuperadmin ? [{ name: 'Services', href: '/services', icon: Server }] : []),
         { name: 'Domains', href: '/domains', icon: Globe },
+        { name: 'App Manager', href: '/apps', icon: Cpu, badge: 'Node/Py/React' },
         { name: 'Subdomains', href: '/subdomains', icon: Network },
         { name: 'DNS Zones', href: '/dns', icon: Layers },
         { name: 'Databases', href: '/databases', icon: Database },

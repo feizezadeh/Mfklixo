@@ -44,7 +44,7 @@ if [[ "$OS_NAME" == "ubuntu" ]] || [[ "$OS_LIKE" =~ "debian" ]]; then
     apt-get update -y
     apt-get install -y git curl wget zip unzip tar systemd openssl \
                        php-cli php-fpm php-mysql php-mbstring php-xml php-curl \
-                       mariadb-server nginx apache2 nodejs npm
+                       mariadb-server nginx apache2 nodejs npm python3 python3-venv python3-pip
 elif [[ "$OS_NAME" =~ "centos" ]] || [[ "$OS_NAME" =~ "rhel" ]] || [[ "$OS_NAME" =~ "almalinux" ]] || [[ "$OS_NAME" =~ "rocky" ]] || [[ "$OS_LIKE" =~ "rhel" ]]; then
     OS_FAMILY="rhel"
     yum update -y

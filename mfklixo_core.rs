@@ -3497,27 +3497,40 @@ async fn files_upload(
     mut multipart: Multipart,
 ) -> ApiResult<Value> {
     let mut target_dir = state.cfg.home_base_dir.join(&claims.sub);
-    let mut saved_path = String::new();
-    let mut saved_name = String::new();
+    let mut pending_files: Vec<(String, Vec<u8>)> = Vec::new();
 
     while let Ok(Some(field)) = multipart.next_field().await {
         let field_name = field.name().unwrap_or("").to_string();
-        if field_name == "path" {
+        if field_name == "path" || field_name == "target_dir" || field_name == "dir" {
             if let Ok(text) = field.text().await {
-                if let Ok(resolved) = sys::resolve_safe_path(&state.cfg.home_base_dir, &claims, &text) {
-                    target_dir = resolved;
+                if !text.trim().is_empty() {
+                    target_dir = sys::resolve_safe_path(&state.cfg.home_base_dir, &claims, &text)?;
                 }
             }
         } else if let Some(fname) = field.file_name().map(|s| s.to_string()) {
             let safe_name = sys::sanitize_filename(&fname)?;
             if let Ok(bytes) = field.bytes().await {
-                let _ = fs::create_dir_all(&target_dir);
-                let dest = target_dir.join(&safe_name);
-                fs::write(&dest, &bytes).map_err(|e| ApiError::SystemExec(e.to_string()))?;
-                saved_path = dest.to_string_lossy().to_string();
-                saved_name = safe_name;
+                pending_files.push((safe_name, bytes.to_vec()));
             }
         }
+    }
+
+    let mut saved_path = String::new();
+    let mut saved_name = String::new();
+    let _ = fs::create_dir_all(&target_dir);
+
+    for (safe_name, bytes) in pending_files {
+        let dest = target_dir.join(&safe_name);
+        fs::write(&dest, &bytes).map_err(|e| ApiError::SystemExec(e.to_string()))?;
+        if !claims.is_superadmin() {
+            let owner_spec = format!("{}:{}", claims.sub, claims.sub);
+            let _ = Command::new("chown")
+                .args([owner_spec.as_str(), dest.to_string_lossy().as_ref()])
+                .output()
+                .await;
+        }
+        saved_path = dest.to_string_lossy().to_string();
+        saved_name = safe_name;
     }
 
     Ok(Json(json!({

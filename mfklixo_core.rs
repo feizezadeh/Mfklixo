@@ -2290,50 +2290,116 @@ async fn domains_create(
 ) -> ApiResult<Value> {
     let domain = payload
         .domain
-        .ok_or_else(|| ApiError::BadRequest("Domain name is required".to_string()))?;
+        .ok_or_else(|| ApiError::BadRequest("Domain name is required".to_string()))?
+        .trim()
+        .to_lowercase();
     sys::validate_domain(&domain)?;
 
-    let docroot = state
-        .cfg
-        .home_base_dir
-        .join(&claims.sub)
-        .join(&domain)
-        .join("public_html");
+    // Use /home/{user}/public_html for a non-admin user's primary (first) domain,
+    // and /home/{user}/{domain}/public_html for additional addon domains.
+    let existing_count = sqlx::query_scalar::<_, i64>(
+        "SELECT COUNT(*) FROM domain WHERE parent_clname = ? AND nname != ?",
+    )
+    .bind(&claims.sub)
+    .bind(&domain)
+    .fetch_one(&state.db)
+    .await
+    .unwrap_or(0);
+
+    let docroot = if !claims.is_superadmin() && existing_count == 0 {
+        state.cfg.home_base_dir.join(&claims.sub).join("public_html")
+    } else {
+        state
+            .cfg
+            .home_base_dir
+            .join(&claims.sub)
+            .join(&domain)
+            .join("public_html")
+    };
     let _ = fs::create_dir_all(&docroot);
 
     let index_html = docroot.join("index.html");
-    if !index_html.exists() {
+    let index_php = docroot.join("index.php");
+    if !index_html.exists() && !index_php.exists() {
         let _ = fs::write(
             &index_html,
             format!("<html><body><h1>Welcome to {}</h1></body></html>", domain),
         );
     }
 
-    let vhost_conf = format!(
-        "server {{\n    listen 80;\n    server_name {d} www.{d};\n    root {r};\n    index index.php index.html index.htm;\n}}\n",
+    if !claims.is_superadmin() {
+        let _ = Command::new("chown")
+            .args([
+                "-R",
+                &format!("{}:{}", claims.sub, claims.sub),
+                &docroot.to_string_lossy(),
+            ])
+            .output()
+            .await;
+    }
+
+    let docroot_str = docroot.to_string_lossy();
+    let ssl_cert = state.cfg.kloxo_ssl_dir.join(format!("{}.crt", domain));
+    let ssl_key = state.cfg.kloxo_ssl_dir.join(format!("{}.key", domain));
+    let (cert_path, key_path) = if ssl_cert.exists() && ssl_key.exists() {
+        (
+            ssl_cert.to_string_lossy().to_string(),
+            ssl_key.to_string_lossy().to_string(),
+        )
+    } else {
+        let fallback = state
+            .cfg
+            .kloxo_etc_dir
+            .join("program.pem")
+            .to_string_lossy()
+            .to_string();
+        (fallback.clone(), fallback)
+    };
+
+    let nginx_conf = format!(
+        "server {{\n    listen 80;\n    listen [::]:80;\n    server_name {d} www.{d};\n    root {r};\n    index index.php index.html index.htm;\n\n    location ^~ /.well-known/acme-challenge/ {{\n        root /var/www/html;\n        default_type \"text/plain\";\n        allow all;\n    }}\n\n    location ~* \\.(jpg|jpeg|gif|png|webp|ico|svg|css|js|woff|woff2|ttf|eot|mp4|ogg|mp3|pdf|zip|gz|bz2)$ {{\n        try_files $uri $uri/ /public/$uri @apache;\n        expires 30d;\n        access_log off;\n    }}\n\n    location / {{\n        proxy_pass http://127.0.0.1:8080;\n        proxy_set_header Host $host;\n        proxy_set_header X-Real-IP $remote_addr;\n        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n        proxy_set_header X-Forwarded-Proto $scheme;\n        proxy_read_timeout 300;\n        proxy_buffer_size 128k;\n        proxy_buffers 4 256k;\n    }}\n\n    location @apache {{\n        proxy_pass http://127.0.0.1:8080;\n        proxy_set_header Host $host;\n        proxy_set_header X-Real-IP $remote_addr;\n        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n        proxy_set_header X-Forwarded-Proto $scheme;\n    }}\n\n    location ~ /\\. {{\n        deny all;\n    }}\n}}\n\nserver {{\n    listen 443 ssl;\n    listen [::]:443 ssl;\n    server_name {d} www.{d};\n    ssl_certificate {cert};\n    ssl_certificate_key {key};\n    root {r};\n    index index.php index.html index.htm;\n\n    location ^~ /.well-known/acme-challenge/ {{\n        root /var/www/html;\n        default_type \"text/plain\";\n        allow all;\n    }}\n\n    location ~* \\.(jpg|jpeg|gif|png|webp|ico|svg|css|js|woff|woff2|ttf|eot|mp4|ogg|mp3|pdf|zip|gz|bz2)$ {{\n        try_files $uri $uri/ /public/$uri @apache;\n        expires 30d;\n        access_log off;\n    }}\n\n    location / {{\n        proxy_pass http://127.0.0.1:8080;\n        proxy_set_header Host $host;\n        proxy_set_header X-Real-IP $remote_addr;\n        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n        proxy_set_header X-Forwarded-Proto https;\n        proxy_read_timeout 300;\n        proxy_buffer_size 128k;\n        proxy_buffers 4 256k;\n    }}\n\n    location @apache {{\n        proxy_pass http://127.0.0.1:8080;\n        proxy_set_header Host $host;\n        proxy_set_header X-Real-IP $remote_addr;\n        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n        proxy_set_header X-Forwarded-Proto https;\n    }}\n\n    location ~ /\\. {{\n        deny all;\n    }}\n}}\n",
         d = domain,
-        r = docroot.to_string_lossy()
+        r = docroot_str,
+        cert = cert_path,
+        key = key_path
     );
+
+    let apache_conf = format!(
+        "<VirtualHost 127.0.0.1:8080>\n    ServerName {d}\n    ServerAlias www.{d}\n    DocumentRoot {r}\n    <Directory {r}>\n        Options -Indexes +FollowSymLinks\n        AllowOverride All\n        Require all granted\n    </Directory>\n    <FilesMatch \\.php$>\n        SetHandler \"proxy:unix:/run/php/php-fpm.sock|fcgi://localhost\"\n    </FilesMatch>\n</VirtualHost>\n",
+        d = domain,
+        r = docroot_str
+    );
+
     let _ = fs::write(
         state.cfg.kloxo_httpd_dir.join(format!("{}.conf", domain)),
-        vhost_conf,
+        &nginx_conf,
+    );
+    let _ = fs::write(
+        format!("/etc/nginx/conf.d/vhost-{}.conf", domain),
+        &nginx_conf,
+    );
+    let _ = fs::write(
+        format!("/etc/apache2/sites-enabled/vhost-{}.conf", domain),
+        &apache_conf,
     );
 
     sqlx::query(
         "REPLACE INTO domain (nname, parent_clname, status, webpserver, dnspserver, mmailpserver)
-         VALUES (?, ?, 'on', 'nginx', 'bind', 'postfix')",
+         VALUES (?, ?, 'on', 'apache_nginx', 'bind', 'postfix')",
     )
     .bind(&domain)
     .bind(&claims.sub)
     .execute(&state.db)
     .await?;
 
+    let _ = Command::new("systemctl").args(["reload", "apache2"]).output().await;
     let _ = Command::new("systemctl").args(["reload", "nginx"]).output().await;
 
     Ok(Json(json!({
         "success": true,
         "message": format!("Domain {} created successfully", domain),
-        "domain": domain
+        "domain": domain,
+        "docroot": docroot_str
     })))
 }
 
@@ -2367,11 +2433,14 @@ async fn domains_delete(
     }
 
     let _ = fs::remove_file(state.cfg.kloxo_httpd_dir.join(format!("{}.conf", domain)));
+    let _ = fs::remove_file(format!("/etc/nginx/conf.d/vhost-{}.conf", domain));
+    let _ = fs::remove_file(format!("/etc/apache2/sites-enabled/vhost-{}.conf", domain));
     sqlx::query("DELETE FROM domain WHERE nname = ?")
         .bind(&domain)
         .execute(&state.db)
         .await?;
 
+    let _ = Command::new("systemctl").args(["reload", "apache2"]).output().await;
     let _ = Command::new("systemctl").args(["reload", "nginx"]).output().await;
 
     Ok(Json(json!({

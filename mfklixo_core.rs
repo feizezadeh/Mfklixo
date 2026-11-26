@@ -3678,24 +3678,26 @@ async fn files_rename(
 #[derive(Debug, Deserialize)]
 pub struct FileChmodPayload {
     pub path: String,
+    #[serde(alias = "permissions")]
     pub mode: String,
 }
 
-/// `POST /api/v1/files/chmod`
+/// `POST /api/v1/files/chmod` & `POST /api/v1/files/permissions`
 async fn files_chmod(
     State(state): State<AppState>,
     claims: Claims,
     Json(payload): Json<FileChmodPayload>,
 ) -> ApiResult<Value> {
     let target = sys::resolve_safe_path(&state.cfg.home_base_dir, &claims, &payload.path)?;
-    let mode_num = u32::from_str_radix(payload.mode.trim_start_matches('0'), 8)
-        .unwrap_or(0o644);
+    let cleaned = payload.mode.trim();
+    let mode_num = u32::from_str_radix(cleaned, 8)
+        .map_err(|_| ApiError::BadRequest(format!("Invalid octal permission mode: {}", cleaned)))?;
     fs::set_permissions(&target, fs::Permissions::from_mode(mode_num))
         .map_err(|e| ApiError::SystemExec(e.to_string()))?;
 
     Ok(Json(json!({
         "success": true,
-        "message": "Permissions updated"
+        "message": format!("Permissions updated to {:04o}", mode_num)
     })))
 }
 
@@ -6589,6 +6591,7 @@ fn build_v1_router() -> Router<AppState> {
         .route("/files/compress", post(files_compress))
         .route("/files/rename", post(files_rename))
         .route("/files/chmod", post(files_chmod))
+        .route("/files/permissions", post(files_chmod))
         .route("/files/move", post(files_move))
         .route("/files/copy", post(files_copy))
         .route("/files/delete", delete(files_delete))
